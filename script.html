@@ -1,627 +1,644 @@
 <script>
-    let allCountryData = [];
-    let currentSummaryData = {};
-    
-    // --- INITIALIZATION ---
-    
-    document.addEventListener("DOMContentLoaded", () => {
-      // Navigation listeners
-      handleHashChange();
-      window.addEventListener("hashchange", handleHashChange);
-    
-      // Form and Data Entry listeners
-      document
-        .getElementById("area")
-        .addEventListener("change", () =>
-          populateCountriesByArea(document.getElementById("area").value)
-        );
-      document.getElementById("submitButton").addEventListener("click", submitForm);
-      document
-        .getElementById("saveChangesButton")
-        .addEventListener("click", saveChanges);
-      document
-        .getElementById("decrementButton")
-        .addEventListener("click", decrementVisitors);
-      document
-        .getElementById("incrementButton")
-        .addEventListener("click", incrementVisitors);
-    
-      // Summary and Search listeners
-      document
-        .getElementById("getSummaryButton")
-        .addEventListener("click", loadHistoricalSummary);
-      document
-        .getElementById("exportSummaryButton")
-        .addEventListener("click", exportSummaryToXlsx);
-      document
-        .getElementById("searchButton")
-        .addEventListener("click", searchInquiries);
+let allCountryData = [];
+let currentSummaryData = {};
+
+// --- INITIALIZATION ---
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Navigation listeners
+  handleHashChange();
+  window.addEventListener("hashchange", handleHashChange);
+
+  // Form and Data Entry listeners
+  document
+    .getElementById("area")
+    .addEventListener("change", () =>
+      populateCountriesByArea(document.getElementById("area").value)
+    );
+  document.getElementById("submitButton").addEventListener("click", submitForm);
+  document
+    .getElementById("saveChangesButton")
+    .addEventListener("click", saveChanges);
+  document
+    .getElementById("decrementButton")
+    .addEventListener("click", decrementVisitors);
+  document
+    .getElementById("incrementButton")
+    .addEventListener("click", incrementVisitors);
+
+  // Summary and Search listeners
+  document
+    .getElementById("getSummaryButton")
+    .addEventListener("click", loadHistoricalSummary);
+  document
+    .getElementById("exportSummaryButton")
+    .addEventListener("click", exportSummaryToXlsx);
+  document
+    .getElementById("searchButton")
+    .addEventListener("click", searchInquiries);
+});
+
+// --- INITIALIZATION - STAGE 2: Page is fully loaded ---
+// This runs after the HTML, images, and other resources are fully loaded.
+// This is the best place for initial data fetching from the backend.
+window.onload = function () {
+  // Set up the clock
+  updateDateTime();
+  setInterval(updateDateTime, 1000);
+
+  // Fetch initial country data for form dropdowns
+  google.script.run
+    .withSuccessHandler((data) => {
+      allCountryData = data;
+      populateAreasFromCountryData(data);
+    })
+    .getAllCountryData();
+
+  // Populate the date selectors for summary/search
+  populateDateSelectors();
+
+  loadRecentEntries();
+};
+
+function showPage(pageId, navId) {
+  // Hide all pages
+  document.querySelectorAll(".page").forEach((page) => {
+    page.classList.remove("active");
+  });
+
+  // Remove active class from all nav links
+  document.querySelectorAll(".nav-item a").forEach((link) => {
+    link.classList.remove("active");
+    link.removeAttribute("aria-current");
+  });
+
+  // Show the target page
+  const targetPage = document.getElementById(pageId);
+  if (targetPage) {
+    targetPage.classList.add("active");
+  }
+
+  // Activate the correct nav link
+  const navLink = document.getElementById(navId);
+  if (navLink) {
+    navLink.classList.add("active");
+    navLink.setAttribute("aria-current", "page");
+  }
+
+  window.scrollTo({ top: 0});
+}
+
+function handleHashChange() {
+  const hash = window.location.hash.replace("#", "") || "entry";
+  const pageId = `page-${hash}`;
+  const navId = `nav-${hash}`;
+  showPage(pageId, navId);
+}
+
+function updateDateTime() {
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const formattedTime = now.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  document.getElementById(
+    "datetimeDisplay"
+  ).innerHTML = `${formattedDate}<br>${formattedTime}`;
+}
+
+// --- NEW HELPER FUNCTION to populate date selectors ---
+function populateDateSelectors() {
+  const summaryYearSelect = document.getElementById("summaryYear");
+  const monthSelect = document.getElementById("summaryMonth");
+  const searchYearSelect = document.getElementById("searchYear");
+
+  const currentYear = new Date().getFullYear();
+  const startYear = 2023; // Or change to the first year of your data
+
+  // Populate search year selector with "All Years" option
+  const allYearsOption = document.createElement("option");
+  allYearsOption.value = "All";
+  allYearsOption.textContent = "All Years";
+  searchYearSelect.appendChild(allYearsOption);
+
+  // Populate year dropdowns (for both summary and search)
+  for (let y = currentYear; y >= startYear; y--) {
+    const option = document.createElement("option");
+    option.value = y;
+    const searchOptionText = `${y}年度`;
+    const summaryOptionText = y;
+
+    const searchOption = option.cloneNode(true);
+    searchOption.textContent = searchOptionText;
+    searchYearSelect.appendChild(searchOption);
+
+    option.textContent = summaryOptionText;
+    summaryYearSelect.appendChild(option);
+  }
+
+  const monthNames = [
+    "1月",
+    "2月",
+    "3月",
+    "4月",
+    "5月",
+    "6月",
+    "7月",
+    "8月",
+    "9月",
+    "10月",
+    "11月",
+    "12月",
+  ];
+  for (let m = 0; m < 12; m++) {
+    const option = document.createElement("option");
+    option.value = m + 1; // Month value is 1-12
+    option.textContent = monthNames[m];
+    monthSelect.appendChild(option);
+  }
+
+  // Default the summary selectors to the current month and year
+  summaryYearSelect.value = currentYear;
+  monthSelect.value = new Date().getMonth() + 1;
+}
+
+// --- FORM & DROPDOWN LOGIC ---
+function populateAreasFromCountryData(data) {
+  const areas = [
+    "Europe",
+    "North America",
+    "Oceania",
+    "Asia",
+    "South America",
+    "Middle East",
+    "Africa",
+    "Unknown",
+  ];
+  const areaSelect = document.getElementById("area");
+  areaSelect.innerHTML = "";
+  areas.forEach((area) => {
+    const option = document.createElement("option");
+    option.value = area;
+    option.textContent = area;
+    areaSelect.appendChild(option);
+  });
+  areaSelect.value = "Europe";
+  populateCountriesByArea("Europe");
+}
+
+function populateCountriesByArea(area) {
+  const countrySelect = document.getElementById("country");
+  countrySelect.innerHTML = "";
+  
+  allCountryData
+    .filter((c) => c.area === area)
+    .sort((a, b) =>
+      a.isFrequent === b.isFrequent
+        ? a.name.localeCompare(b.name)
+        : a.isFrequent
+        ? -1
+        : 1
+    )
+    .forEach((c) => {
+      const option = document.createElement("option");
+      option.value = c.name;
+      option.textContent = c.name;
+      countrySelect.appendChild(option);
     });
-    
-    // --- INITIALIZATION - STAGE 2: Page is fully loaded ---
-    // This runs after the HTML, images, and other resources are fully loaded.
-    // This is the best place for initial data fetching from the backend.
-    window.onload = function () {
-      // Set up the clock
-      updateDateTime();
-      setInterval(updateDateTime, 1000);
-    
-      // Fetch initial country data for form dropdowns
-      google.script.run
-        .withSuccessHandler((data) => {
-          allCountryData = data;
-          populateAreasFromCountryData(data);
-        })
-        .getAllCountryData();
-    
-      // Populate the date selectors for summary/search
-      populateDateSelectors();
-    
-      // Load the initial table of today's entries
+}
+
+function decrementVisitors() {
+  const touristsInput = document.getElementById("tourists");
+  let currentValue = parseInt(touristsInput.value, 10);
+  if (isNaN(currentValue)) currentValue = 1; // Default to 1 if input is not a number
+
+  if (currentValue > 1) {
+    // Check against the minimum value
+    touristsInput.value = currentValue - 1;
+  }
+}
+
+function incrementVisitors() {
+  const touristsInput = document.getElementById("tourists");
+  let currentValue = parseInt(touristsInput.value, 10);
+  if (isNaN(currentValue)) currentValue = 0; // Default to 0 if input is not a number
+
+  touristsInput.value = currentValue + 1;
+}
+
+function validateVisitorCount(input) {
+  if (input.value && parseInt(input.value) < 1) {
+    showCustomAlert("Number of visitors must be at least 1.", "warning");
+  }
+}
+
+function resetForm() {
+  document.getElementById("touristForm").reset();
+  document.getElementById("submitButton").style.display = "block";
+  document.getElementById("saveChangesButton").style.display = "none";
+  populateAreasFromCountryData(allCountryData);
+}
+
+// --- DATA SUBMISSION & EDITING ---
+function submitForm() {
+  const area = document.getElementById("area").value;
+  const country = document.getElementById("country").value;
+  const numberOfVisitors = document.getElementById("tourists").value;
+  const accommodation = document.getElementById("accommodation").value;
+  const inquiryDetails = document.getElementById("inquiry").value.trim();
+
+  // A single, comprehensive validation check
+  if (
+    !area ||
+    !country ||
+    !numberOfVisitors ||
+    parseInt(numberOfVisitors) < 1
+  ) {
+    showCustomAlert(
+      "Please complete all required fields and ensure visitors is at least 1.",
+      "warning"
+    );
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(() => {
+      showCustomAlert("Data submitted successfully!", "success");
+      resetForm();
       loadRecentEntries();
-    };
-    
-    function showPage(pageId, navId) {
-      // Hide all pages
-      document.querySelectorAll(".page").forEach((page) => {
-        page.classList.remove("active");
-      });
-    
-      // Remove active class from all nav links
-      document.querySelectorAll(".nav-item a").forEach((link) => {
-        link.classList.remove("active");
-        link.removeAttribute("aria-current");
-      });
-    
-      // Show the target page
-      const targetPage = document.getElementById(pageId);
-      if (targetPage) {
-        targetPage.classList.add("active");
+      // Optional: Refresh summary if it's already displayed
+      if (Object.keys(currentSummaryData).length > 0) {
+        loadHistoricalSummary();
       }
+    })
+    .withFailureHandler((error) =>
+      showCustomAlert("Error: " + error.message, "error")
+    )
+    .submitVisitorData(
+      area,
+      country,
+      Number(numberOfVisitors),
+      inquiryDetails,
+      accommodation
+    );
+}
+
+function startEdit(entry) {
+  document.getElementById("area").value = entry.area;
+  populateCountriesByArea(entry.area);
+  document.getElementById("country").value = entry.country;
+  document.getElementById("tourists").value = entry.visitors;
+  document.getElementById("accommodation").value = entry.accommodation || "";
+  document.getElementById("inquiry").value = entry.inquiryDetails || "";
+  document.getElementById("editTimestamp").value = entry.timestamp;
+
+  document.getElementById("submitButton").style.display = "none";
+  document.getElementById("saveChangesButton").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function saveChanges() {
+  const timestamp = document.getElementById("editTimestamp").value;
+  const updatedEntry = {
+    area: document.getElementById("area").value,
+    country: document.getElementById("country").value,
+    visitors: parseInt(document.getElementById("tourists").value, 10),
+    accommodation: document.getElementById("accommodation").value,
+    inquiryDetails: document.getElementById("inquiry").value.trim(),
+  };
+
+  google.script.run
+    .withSuccessHandler(() => {
+      showCustomAlert("Entry updated successfully.", "success");
+      resetForm();
+      loadRecentEntries();
+    })
+    .withFailureHandler((error) =>
+      showCustomAlert("Error: " + error.message, "error")
+    )
+    .editEntry(timestamp, updatedEntry);
+}
+
+function deleteEntry(timestamp) {
+  if (!confirm("Are you sure you want to delete this entry?")) return;
+  google.script.run
+    .withSuccessHandler(() => {
+      showCustomAlert("Entry deleted successfully.", "success");
+      loadRecentEntries();
+    })
+    .withFailureHandler((error) =>
+      showCustomAlert("Error: " + error.message, "error")
+    )
+    .deleteEntry(timestamp);
+}
+
+// --- DISPLAY RECENT ENTRIES ---
+function loadRecentEntries() {
+  google.script.run.withSuccessHandler(displayEntries).getRecentEntries();
+}
+
+function displayEntries(entries) {
+// --- CORRECTED: Timezone-aware daily counter logic ---
+  const today = new Date();
+  
+  // Get today's date formatted for the Japanese timezone (e.g., "2025/07/11")
+  const todayInJST = new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Tokyo'
+  }).format(today);
+
+  // Filter the incoming entries by comparing their dates in the Japanese timezone
+  const todayEntries = entries.filter(entry => {
+    const entryDate = new Date(entry.timestamp);
+    const entryDateInJST = new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Tokyo'
+    }).format(entryDate);
     
-      // Activate the correct nav link
-      const navLink = document.getElementById(navId);
-      if (navLink) {
-        navLink.classList.add("active");
-        navLink.setAttribute("aria-current", "page");
-      }
-    
-      window.scrollTo({ top: 0});
-    }
-    
-    function handleHashChange() {
-      const hash = window.location.hash.replace("#", "") || "entry";
-      const pageId = `page-${hash}`;
-      const navId = `nav-${hash}`;
-      showPage(pageId, navId);
-    }
-    
-    function updateDateTime() {
-      const now = new Date();
-      const formattedDate = now.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-      const formattedTime = now.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-      document.getElementById(
-        "datetimeDisplay"
-      ).innerHTML = `${formattedDate}<br>${formattedTime}`;
-    }
-    
-    // --- NEW HELPER FUNCTION to populate date selectors ---
-    function populateDateSelectors() {
-      const summaryYearSelect = document.getElementById("summaryYear");
-      const monthSelect = document.getElementById("summaryMonth");
-      const searchYearSelect = document.getElementById("searchYear");
-    
-      const currentYear = new Date().getFullYear();
-      const startYear = 2023; // Or change to the first year of your data
-    
-      // Populate search year selector with "All Years" option
-      const allYearsOption = document.createElement("option");
-      allYearsOption.value = "All";
-      allYearsOption.textContent = "All Years";
-      searchYearSelect.appendChild(allYearsOption);
-    
-      // Populate year dropdowns (for both summary and search)
-      for (let y = currentYear; y >= startYear; y--) {
-        const option = document.createElement("option");
-        option.value = y;
-        const searchOptionText = `${y}年度`;
-        const summaryOptionText = y;
-    
-        const searchOption = option.cloneNode(true);
-        searchOption.textContent = searchOptionText;
-        searchYearSelect.appendChild(searchOption);
-    
-        option.textContent = summaryOptionText;
-        summaryYearSelect.appendChild(option);
-      }
-    
-      const monthNames = [
-        "1月",
-        "2月",
-        "3月",
-        "4月",
-        "5月",
-        "6月",
-        "7月",
-        "8月",
-        "9月",
-        "10月",
-        "11月",
-        "12月",
-      ];
-      for (let m = 0; m < 12; m++) {
-        const option = document.createElement("option");
-        option.value = m + 1; // Month value is 1-12
-        option.textContent = monthNames[m];
-        monthSelect.appendChild(option);
-      }
-    
-      // Default the summary selectors to the current month and year
-      summaryYearSelect.value = currentYear;
-      monthSelect.value = new Date().getMonth() + 1;
-    }
-    
-    // --- FORM & DROPDOWN LOGIC ---
-    function populateAreasFromCountryData(data) {
-      const areas = [
-        "Europe",
-        "North America",
-        "Oceania",
-        "Asia",
-        "South America",
-        "Middle East",
-        "Africa",
-        "Unknown",
-      ];
-      const areaSelect = document.getElementById("area");
-      areaSelect.innerHTML = "";
-      areas.forEach((area) => {
-        const option = document.createElement("option");
-        option.value = area;
-        option.textContent = area;
-        areaSelect.appendChild(option);
-      });
-      areaSelect.value = "Europe";
-      populateCountriesByArea("Europe");
-    }
-    
-    function populateCountriesByArea(area) {
-      const countrySelect = document.getElementById("country");
-      countrySelect.innerHTML = "";
-      
-      allCountryData
-        .filter((c) => c.area === area)
-        .sort((a, b) =>
-          a.isFrequent === b.isFrequent
-            ? a.name.localeCompare(b.name)
-            : a.isFrequent
-            ? -1
-            : 1
-        )
-        .forEach((c) => {
-          const option = document.createElement("option");
-          option.value = c.name;
-          option.textContent = c.name;
-          countrySelect.appendChild(option);
-        });
-    }
-    
-    function decrementVisitors() {
-      const touristsInput = document.getElementById("tourists");
-      let currentValue = parseInt(touristsInput.value, 10);
-      if (isNaN(currentValue)) currentValue = 1; // Default to 1 if input is not a number
-    
-      if (currentValue > 1) {
-        // Check against the minimum value
-        touristsInput.value = currentValue - 1;
-      }
-    }
-    
-    function incrementVisitors() {
-      const touristsInput = document.getElementById("tourists");
-      let currentValue = parseInt(touristsInput.value, 10);
-      if (isNaN(currentValue)) currentValue = 0; // Default to 0 if input is not a number
-    
-      touristsInput.value = currentValue + 1;
-    }
-    
-    function validateVisitorCount(input) {
-      if (input.value && parseInt(input.value) < 1) {
-        showCustomAlert("Number of visitors must be at least 1.", "warning");
-      }
-    }
-    
-    function resetForm() {
-      document.getElementById("touristForm").reset();
-      document.getElementById("submitButton").style.display = "block";
-      document.getElementById("saveChangesButton").style.display = "none";
-      populateAreasFromCountryData(allCountryData);
-    }
-    
-    // --- DATA SUBMISSION & EDITING ---
-    function submitForm() {
-      const area = document.getElementById("area").value;
-      const country = document.getElementById("country").value;
-      const numberOfVisitors = document.getElementById("tourists").value;
-      const accommodation = document.getElementById("accommodation").value;
-      const inquiryDetails = document.getElementById("inquiry").value.trim();
-    
-      // A single, comprehensive validation check
-      if (
-        !area ||
-        !country ||
-        !numberOfVisitors ||
-        parseInt(numberOfVisitors) < 1
-      ) {
-        showCustomAlert(
-          "Please complete all required fields and ensure visitors is at least 1.",
-          "warning"
-        );
-        return;
-      }
-    
-      google.script.run
-        .withSuccessHandler(() => {
-          showCustomAlert("Data submitted successfully!", "success");
-          resetForm();
-          loadRecentEntries();
-          // Optional: Refresh summary if it's already displayed
-          if (Object.keys(currentSummaryData).length > 0) {
-            loadHistoricalSummary();
-          }
-        })
-        .withFailureHandler((error) =>
-          showCustomAlert("Error: " + error.message, "error")
-        )
-        .submitVisitorData(
-          area,
-          country,
-          Number(numberOfVisitors),
-          inquiryDetails,
-          accommodation
-        );
-    }
-    
-    function startEdit(entry) {
-      document.getElementById("area").value = entry.area;
-      populateCountriesByArea(entry.area);
-      document.getElementById("country").value = entry.country;
-      document.getElementById("tourists").value = entry.visitors;
-      document.getElementById("accommodation").value = entry.accommodation || "";
-      document.getElementById("inquiry").value = entry.inquiryDetails || "";
-      document.getElementById("editTimestamp").value = entry.timestamp;
-    
-      document.getElementById("submitButton").style.display = "none";
-      document.getElementById("saveChangesButton").style.display = "block";
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-    
-    function saveChanges() {
-      const timestamp = document.getElementById("editTimestamp").value;
-      const updatedEntry = {
-        area: document.getElementById("area").value,
-        country: document.getElementById("country").value,
-        visitors: parseInt(document.getElementById("tourists").value, 10),
-        accommodation: document.getElementById("accommodation").value,
-        inquiryDetails: document.getElementById("inquiry").value.trim(),
-      };
-    
-      google.script.run
-        .withSuccessHandler(() => {
-          showCustomAlert("Entry updated successfully.", "success");
-          resetForm();
-          loadRecentEntries();
-        })
-        .withFailureHandler((error) =>
-          showCustomAlert("Error: " + error.message, "error")
-        )
-        .editEntry(timestamp, updatedEntry);
-    }
-    
-    function deleteEntry(timestamp) {
-      if (!confirm("Are you sure you want to delete this entry?")) return;
-      google.script.run
-        .withSuccessHandler(() => {
-          showCustomAlert("Entry deleted successfully.", "success");
-          loadRecentEntries();
-        })
-        .withFailureHandler((error) =>
-          showCustomAlert("Error: " + error.message, "error")
-        )
-        .deleteEntry(timestamp);
-    }
-    
-    // --- DISPLAY RECENT ENTRIES ---
-    function loadRecentEntries() {
-      google.script.run.withSuccessHandler(displayEntries).getRecentEntries();
-    }
-    
-    function displayEntries(entries) {
-      const tableBody = document.getElementById("entryTableBody");
-      tableBody.innerHTML = "";
-    
-      if (entries.length === 0) {
-        const row = tableBody.insertRow();
-        const cell = row.insertCell();
-        cell.colSpan = 7;
-        cell.textContent = "まだ誰も来ていません><";
-        cell.style.textAlign = "center";
-        return;
-      }
-    
-      entries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
-      entries.forEach((entry) => {
-        const row = tableBody.insertRow();
-        row.insertCell().textContent = new Date(
-          entry.timestamp
-        ).toLocaleString();
-        row.insertCell().textContent = entry.area;
-        row.insertCell().textContent = entry.country;
-        row.insertCell().textContent = entry.visitors;
-        row.insertCell().textContent = entry.accommodation || "";
-        row.insertCell().textContent = entry.inquiryDetails || "";
-    
-        const actionCell = row.insertCell();
-        actionCell.style.display = "flex";
-        actionCell.style.gap = "8px";
-        actionCell.style.justifyContent = "center";
-        actionCell.style.alignItems = "center";
-    
-        const editBtn = document.createElement("button");
-        editBtn.textContent = "Edit";
-        editBtn.style = "background-color: #4CAF50; padding: 8px 12px;";
-        editBtn.onclick = () => startEdit(entry);
-        actionCell.appendChild(editBtn);
-    
-        const delBtn = document.createElement("button");
-        delBtn.textContent = "Delete";
-        delBtn.style = "background-color: #dc3545; padding: 8px 12px;";
-        delBtn.onclick = () => deleteEntry(entry.timestamp);
-        actionCell.appendChild(delBtn);
-      });
-    }
-    
-    // --- MONTHLY SUMMARY & EXPORT ---
-    
-    /**
-     * Called when the "Get Summary" button is clicked.
-     * It reads the selected year and month, then calls the backend to fetch the summary.
-     */
-    function loadHistoricalSummary() {
-      const year = document.getElementById("summaryYear").value;
-      const month = document.getElementById("summaryMonth").value;
-      const container = document.getElementById("monthlySummaryContainer");
-      const getButton = document.getElementById("getSummaryButton");
-      const exportButton = document.getElementById("exportSummaryButton");
-    
-      container.innerHTML = `<p>Loading summary for ${year}年${month}月...</p>`;
-      getButton.disabled = true;
-      exportButton.disabled = true;
-    
-      google.script.run
-        .withSuccessHandler((response) => {
-          displayMonthlySummary(response); // Call the display function on success
-          getButton.disabled = false; // Re-enable the button
-        })
-        .withFailureHandler((error) => {
-          container.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
-          getButton.disabled = false; // Re-enable the button on error too
-        })
-        .getSummaryForMonth(Number(year), Number(month)); // Calls the backend function
-    }
-    
-    /**
-     * Renders the summary data into cards on the webpage.
-     * @param {object} summaryData The data object returned from the backend.
-     */
-    function displayMonthlySummary(summaryData) {
-      currentSummaryData = summaryData; // Store data globally for the export function
-      const container = document.getElementById("monthlySummaryContainer");
-      container.innerHTML = ""; // Clear loading message
-    
-      document.getElementById("exportSummaryButton").disabled = false;
-    
-      const regionOrder = [
-        "Asia",
-        "Middle East",
-        "Europe",
-        "Africa",
-        "North America",
-        "South America",
-        "Oceania",
-        "Unknown",
-      ];
-    
-      const regionsToDisplay = regionOrder.filter((region) =>
-        summaryData.hasOwnProperty(region)
-      );
-    
-      if (regionsToDisplay.length === 0) {
-        container.innerHTML =
-          "<p>No visitor data found for the selected month.</p>";
-        document.getElementById("exportSummaryButton").disabled = true;
-        return;
-      }
-    
-      regionsToDisplay.forEach((region) => {
-        const section = document.createElement("div");
-        section.className = "region-summary";
-    
-        const title = document.createElement("h3");
-        title.className = "region-title";
-        title.textContent = region;
-        section.appendChild(title);
-    
-        let totalVisitors = 0;
-        const countryList = document.createElement("div");
-        countryList.className = "country-list";
-    
-        summaryData[region].forEach((item) => {
-          const row = document.createElement("div");
-          row.className = "country-row";
-          row.innerHTML = `<span>${item.country}</span><span>${item.visitors}</span>`;
-          countryList.appendChild(row);
-          totalVisitors += item.visitors;
-        });
-    
-        section.appendChild(countryList);
-    
-        const totalRow = document.createElement("div");
-        totalRow.className = "total-row";
-        totalRow.innerHTML = `<span>Total for ${region}</span><strong>${totalVisitors}</strong>`;
-        section.appendChild(totalRow);
-    
-        container.appendChild(section);
-      });
-    }
-    
-    function exportSummaryToXlsx() {
-      if (Object.keys(currentSummaryData).length === 0) {
-        showCustomAlert(
-          "Please generate a summary first before exporting.",
-          "warning"
-        );
-        return;
-      }
-    
-      // 1. Flatten the data into a simple array for the spreadsheet.
-      // This logic now ensures all relevant rows are included.
-      const flatData = [];
-      const regionOrder = [
-        "Asia",
-        "Middle East",
-        "Europe",
-        "Africa",
-        "North America",
-        "South America",
-        "Oceania",
-        "Unknown",
-      ];
-    
-      regionOrder.forEach((regionName) => {
-        if (currentSummaryData[regionName]) {
-          currentSummaryData[regionName].forEach((item) => {
-            // This filter correctly skips "Rest of..." rows only if they have zero visitors.
-            if (item.country.startsWith("Rest of") && item.visitors === 0) {
-              return; // Skips this iteration, does not add the row
-            }
-            flatData.push({
-              Region: regionName,
-              "Country / Group": item.country,
-              "Visitor Count": item.visitors,
-            });
-          });
+    return entryDateInJST === todayInJST;
+  });
+
+  const totalVisitorGroupsToday = todayEntries.length;
+  const totalVisitorsToday = todayEntries.reduce((sum, entry) => sum + Number(entry.visitors), 0);
+
+  // This part is efficient and correct: only update the text content
+  document.getElementById('daily-groups-count').textContent = totalVisitorGroupsToday;
+  document.getElementById('daily-visitors-count').textContent = totalVisitorsToday;
+
+  const tableBody = document.getElementById("entryTableBody");
+  
+  const tableRowsHtml = entries.map(entry => {
+    const entryDate = new Date(entry.timestamp);
+    const formattedDateTime = entryDate.toLocaleString('ja-JP');
+
+    return `
+      <tr data-timestamp="${entry.timestamp}">
+        <td>${formattedDateTime}</td>
+        <td>${entry.area || ''}</td>
+        <td>${entry.country || ''}</td>
+        <td>${entry.visitors}</td>
+        <td>${entry.accommodation || ''}</td>
+        <td style="text-align: left; white-space: pre-wrap;">${entry.inquiryDetails || ''}</td>
+        <td style="display: flex; gap: 8px; justify-content: center; align-items: center; border: none;">
+          <button class="edit-btn" style="background-color: #4CAF50; padding: 6px 12px; border-radius: 8px; color: white; border: none; cursor: pointer;">Edit</button>
+          <button class="delete-btn" style="background-color: #dc3545; padding: 6px 12px; border-radius: 8px; color: white; border: none; cursor: pointer;">Delete</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tableBody.innerHTML = tableRowsHtml;
+
+  tableBody.querySelectorAll('.edit-btn').forEach((btn, index) => {
+    btn.onclick = () => startEdit(entries[index]);
+  });
+  tableBody.querySelectorAll('.delete-btn').forEach((btn, index) => {
+    btn.onclick = () => deleteEntry(entries[index].timestamp);
+  });
+}
+
+// --- MONTHLY SUMMARY & EXPORT ---
+
+/**
+ * Called when the "Get Summary" button is clicked.
+ * It reads the selected year and month, then calls the backend to fetch the summary.
+ */
+function loadHistoricalSummary() {
+  const year = document.getElementById("summaryYear").value;
+  const month = document.getElementById("summaryMonth").value;
+  const container = document.getElementById("monthlySummaryContainer");
+  const getButton = document.getElementById("getSummaryButton");
+  const exportButton = document.getElementById("exportSummaryButton");
+
+  container.innerHTML = `<p>Loading summary for ${year}年${month}月...</p>`;
+  getButton.disabled = true;
+  exportButton.disabled = true;
+
+  google.script.run
+    .withSuccessHandler((response) => {
+      displayMonthlySummary(response); // Call the display function on success
+      getButton.disabled = false; // Re-enable the button
+    })
+    .withFailureHandler((error) => {
+      container.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+      getButton.disabled = false; // Re-enable the button on error too
+    })
+    .getSummaryForMonth(Number(year), Number(month)); // Calls the backend function
+}
+
+/**
+ * Renders the summary data into cards on the webpage.
+ * @param {object} summaryData The data object returned from the backend.
+ */
+function displayMonthlySummary(summaryData) {
+  currentSummaryData = summaryData; // Store data globally for the export function
+  const container = document.getElementById("monthlySummaryContainer");
+  container.innerHTML = ""; // Clear loading message
+
+  document.getElementById("exportSummaryButton").disabled = false;
+
+  const regionOrder = [
+    "Asia",
+    "Middle East",
+    "Europe",
+    "Africa",
+    "North America",
+    "South America",
+    "Oceania",
+    "Unknown",
+  ];
+
+  const regionsToDisplay = regionOrder.filter((region) =>
+    summaryData.hasOwnProperty(region)
+  );
+
+  if (regionsToDisplay.length === 0) {
+    container.innerHTML =
+      "<p>No visitor data found for the selected month.</p>";
+    document.getElementById("exportSummaryButton").disabled = true;
+    return;
+  }
+
+  regionsToDisplay.forEach((region) => {
+    const section = document.createElement("div");
+    section.className = "region-summary";
+
+    const title = document.createElement("h3");
+    title.className = "region-title";
+    title.textContent = region;
+    section.appendChild(title);
+
+    let totalVisitors = 0;
+    const countryList = document.createElement("div");
+    countryList.className = "country-list";
+
+    summaryData[region].forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "country-row";
+      row.innerHTML = `<span>${item.country}</span><span>${item.visitors}</span>`;
+      countryList.appendChild(row);
+      totalVisitors += item.visitors;
+    });
+
+    section.appendChild(countryList);
+
+    const totalRow = document.createElement("div");
+    totalRow.className = "total-row";
+    totalRow.innerHTML = `<span>Total for ${region}</span><strong>${totalVisitors}</strong>`;
+    section.appendChild(totalRow);
+
+    container.appendChild(section);
+  });
+}
+
+function exportSummaryToXlsx() {
+  if (Object.keys(currentSummaryData).length === 0) {
+    showCustomAlert(
+      "Please generate a summary first before exporting.",
+      "warning"
+    );
+    return;
+  }
+
+  // 1. Flatten the data into a simple array for the spreadsheet.
+  // This logic now ensures all relevant rows are included.
+  const flatData = [];
+  const regionOrder = [
+    "Asia",
+    "Middle East",
+    "Europe",
+    "Africa",
+    "North America",
+    "South America",
+    "Oceania",
+    "Unknown",
+  ];
+
+  regionOrder.forEach((regionName) => {
+    if (currentSummaryData[regionName]) {
+      currentSummaryData[regionName].forEach((item) => {
+        // This filter correctly skips "Rest of..." rows only if they have zero visitors.
+        if (item.country.startsWith("Rest of") && item.visitors === 0) {
+          return; // Skips this iteration, does not add the row
         }
-      });
-    
-      if (flatData.length === 0) {
-        showCustomAlert("No data with visitors to export.", "info");
-        return;
-      }
-    
-      // 2. Use SheetJS library to create the worksheet and workbook.
-      const worksheet = XLSX.utils.json_to_sheet(flatData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Summary");
-    
-      worksheet["!cols"] = [
-        { wch: 20 }, // Width for Region column
-        { wch: 35 }, // Width for Country / Group column
-        { wch: 15 }, // Width for Visitor Count column
-      ];
-    
-      // 3. Generate and trigger the download of the XLSX file.
-      const year = document.getElementById("summaryYear").value;
-      const month = document.getElementById("summaryMonth").value;
-      const fileName = `VisitorSummary_${year}-${String(month).padStart(
-        2,
-        "0"
-      )}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
-    }
-    
-    // --- CORRECTLY WRAPPED DISPLAY FUNCTION ---
-    function displayMonthlySummary(summaryData) {
-      currentSummaryData = summaryData; // Store data globally for the export function
-      const container = document.getElementById("monthlySummaryContainer");
-      container.innerHTML = "";
-    
-      // Enable the export button now that there is data
-      document.getElementById("exportSummaryButton").disabled = false;
-    
-      // 1. Define your custom order, INCLUDING "Unknown" at the end.
-      const regionOrder = [
-        "Asia",
-        "Middle East",
-        "Europe",
-        "Africa",
-        "North America",
-        "South America",
-        "Oceania",
-        "Unknown",
-      ];
-    
-      // 2. Filter the order array to only include regions that have data.
-      const regionsToDisplay = regionOrder.filter((region) =>
-        summaryData.hasOwnProperty(region)
-      );
-    
-      if (regionsToDisplay.length === 0) {
-        container.innerHTML =
-          "<p>No visitor data found for the selected month.</p>";
-        document.getElementById("exportSummaryButton").disabled = true;
-        return; // This return is now LEGAL because it's inside the function
-      }
-    
-      // 3. Loop through the correctly ordered regions to build the display.
-      regionsToDisplay.forEach((region) => {
-        const section = document.createElement("div");
-        section.className = "region-summary";
-    
-        const title = document.createElement("h3");
-        title.className = "region-title";
-        title.textContent = region;
-        section.appendChild(title);
-    
-        let totalVisitors = 0;
-        const countryList = document.createElement("div");
-        countryList.className = "country-list";
-    
-        summaryData[region].forEach((item) => {
-          const row = document.createElement("div");
-          row.className = "country-row";
-          row.innerHTML = `<span>${item.country}</span><span>${item.visitors}</span>`;
-          countryList.appendChild(row);
-          totalVisitors += item.visitors;
+        flatData.push({
+          Region: regionName,
+          "Country / Group": item.country,
+          "Visitor Count": item.visitors,
         });
-    
-        section.appendChild(countryList);
-    
-        const totalRow = document.createElement("div");
-        totalRow.className = "total-row";
-        totalRow.innerHTML = `<span>Total for ${region}</span><strong>${totalVisitors}</strong>`;
-        section.appendChild(totalRow);
-    
-        container.appendChild(section);
       });
     }
-    
-    // --- UTILITIES ---
-    function showCustomAlert(message, type = "info") {
-      const alertBox = document.getElementById("customAlert");
-      alertBox.textContent = message;
-      alertBox.className = "custom-alert show " + type;
-      setTimeout(() => {
-        alertBox.className = "custom-alert";
-      }, 4000);
-    }
-    </script>
+  });
+
+  if (flatData.length === 0) {
+    showCustomAlert("No data with visitors to export.", "info");
+    return;
+  }
+
+  // 2. Use SheetJS library to create the worksheet and workbook.
+  const worksheet = XLSX.utils.json_to_sheet(flatData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Monthly Summary");
+
+  worksheet["!cols"] = [
+    { wch: 20 }, // Width for Region column
+    { wch: 35 }, // Width for Country / Group column
+    { wch: 15 }, // Width for Visitor Count column
+  ];
+
+  // 3. Generate and trigger the download of the XLSX file.
+  const year = document.getElementById("summaryYear").value;
+  const month = document.getElementById("summaryMonth").value;
+  const fileName = `VisitorSummary_${year}-${String(month).padStart(
+    2,
+    "0"
+  )}.xlsx`;
+  XLSX.writeFile(workbook, fileName);
+}
+
+// --- CORRECTLY WRAPPED DISPLAY FUNCTION ---
+function displayMonthlySummary(summaryData) {
+  currentSummaryData = summaryData; // Store data globally for the export function
+  const container = document.getElementById("monthlySummaryContainer");
+  container.innerHTML = "";
+
+  // Enable the export button now that there is data
+  document.getElementById("exportSummaryButton").disabled = false;
+
+  // 1. Define your custom order, INCLUDING "Unknown" at the end.
+  const regionOrder = [
+    "Asia",
+    "Middle East",
+    "Europe",
+    "Africa",
+    "North America",
+    "South America",
+    "Oceania",
+    "Unknown",
+  ];
+
+  // 2. Filter the order array to only include regions that have data.
+  const regionsToDisplay = regionOrder.filter((region) =>
+    summaryData.hasOwnProperty(region)
+  );
+
+  if (regionsToDisplay.length === 0) {
+    container.innerHTML =
+      "<p>No visitor data found for the selected month.</p>";
+    document.getElementById("exportSummaryButton").disabled = true;
+    return; // This return is now LEGAL because it's inside the function
+  }
+
+  // 3. Loop through the correctly ordered regions to build the display.
+  regionsToDisplay.forEach((region) => {
+    const section = document.createElement("div");
+    section.className = "region-summary";
+
+    const title = document.createElement("h3");
+    title.className = "region-title";
+    title.textContent = region;
+    section.appendChild(title);
+
+    let totalVisitors = 0;
+    const countryList = document.createElement("div");
+    countryList.className = "country-list";
+
+    summaryData[region].forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "country-row";
+      row.innerHTML = `<span>${item.country}</span><span>${item.visitors}</span>`;
+      countryList.appendChild(row);
+      totalVisitors += item.visitors;
+    });
+
+    section.appendChild(countryList);
+
+    const totalRow = document.createElement("div");
+    totalRow.className = "total-row";
+    totalRow.innerHTML = `<span>Total for ${region}</span><strong>${totalVisitors}</strong>`;
+    section.appendChild(totalRow);
+
+    container.appendChild(section);
+  });
+}
+
+// --- UTILITIES ---
+function showCustomAlert(message, type = "info") {
+  const alertBox = document.getElementById("customAlert");
+  alertBox.textContent = message;
+  alertBox.className = "custom-alert show " + type;
+  setTimeout(() => {
+    alertBox.className = "custom-alert";
+  }, 4000);
+}
+</script>
