@@ -2,6 +2,13 @@
 let allCountryData = [];
 let currentSummaryData = {};
 
+// Duplicate submission prevention
+let lastSubmission = {
+  content: null,
+  timestamp: 0
+};
+const SUBMISSION_COOLDOWN = 5000; // 5 seconds cooldown
+
 // --- INITIALIZATION ---
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -267,6 +274,32 @@ function submitForm() {
     return;
   }
 
+  // Check for duplicate submission
+  const currentContent = JSON.stringify({
+    area,
+    country,
+    numberOfVisitors: parseInt(numberOfVisitors),
+    accommodation,
+    inquiryDetails
+  });
+  
+  const now = Date.now();
+  const timeSinceLastSubmission = now - lastSubmission.timestamp;
+  
+  // Prevent duplicate content within cooldown period
+  if (lastSubmission.content === currentContent && timeSinceLastSubmission < SUBMISSION_COOLDOWN) {
+    const remainingTime = Math.ceil((SUBMISSION_COOLDOWN - timeSinceLastSubmission) / 1000);
+    showCustomAlert(
+      `Please wait ${remainingTime} seconds before submitting the same content again.`,
+      "warning"
+    );
+    return;
+  }
+
+  // Update last submission tracking
+  lastSubmission.content = currentContent;
+  lastSubmission.timestamp = now;
+
   google.script.run
     .withSuccessHandler(() => {
       showCustomAlert("Data submitted successfully!", "success");
@@ -277,9 +310,12 @@ function submitForm() {
         loadHistoricalSummary();
       }
     })
-    .withFailureHandler((error) =>
-      showCustomAlert("Error: " + error.message, "error")
-    )
+    .withFailureHandler((error) => {
+      // Reset tracking on failure so user can retry immediately
+      lastSubmission.content = null;
+      lastSubmission.timestamp = 0;
+      showCustomAlert("Error: " + error.message, "error");
+    })
     .submitVisitorData(
       area,
       country,
