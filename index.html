@@ -1,704 +1,308 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Inbound Counting @YIC</title>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-    <link
-      rel="preconnect"
-      href="https://fonts.googleapis.com"
-    />
-    <link
-      rel="preconnect"
-      href="https://fonts.gstatic.com"
-      crossorigin
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=Red+Hat+Display:ital,wght@0,300..900;1,300..900&display=swap"
-      rel="stylesheet"
-    />
-    <style>
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        font-family: "Red Hat Display", "IBM Plex Sans JP", sans-serif;
-        background-color: #f8f9fa;
-        color: #333;
-        padding: 40px 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-
-      .page {
-        position: absolute;
-        top: 100;
-        left: 0;
-        right: 0;
-        bottom: 120;
-
-        opacity: 0;
-        pointer-events: none;
-        visibility: hidden;
-        transition: opacity 0.3s ease;
-      }
-
-      .page.active {
-        opacity: 1;
-        pointer-events: auto;
-        visibility: visible;
-        z-index: 10;
-      }
-
-      main {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        min-height: calc(100vh - 60px);
-      }
-
-      .app-header {
-        --bg-color-rgb: 248, 249, 250;
-        --header-title-color: #000000;
-        --nav-link-color: #495057;
-        --nav-link-hover-text: #ffffff;
-        --nav-link-hover-bg: #6e1a2f;
-        --accent-color: #a32244;
-
-        width: 100%;
-        position: fixed;
-        top: 0;
-        left: 0;
-        background-color: rgba(248, 249, 250, 0.8);
-        z-index: 1000;
-
-        -webkit-backdrop-filter: blur(10px);
-        backdrop-filter: blur(10px);
-      }
-
-      .nav-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 20px;
-      }
-
-      .header-title {
-        color: var(--header-title-color);
-        font-size: 1.2em;
-        font-weight: 600;
-      }
-
-      .nav-menu {
-        list-style: none;
-        display: flex;
-        margin: 0;
-        padding: 0;
-      }
-
-      .nav-item a {
-        display: block;
-        padding: 20px 15px;
-        text-decoration: none;
-        color: var(--nav-link-color);
-        font-weight: 500;
-        transition: color 0.2s, background-color 0.2s;
-      }
-
-      .nav-item a:hover {
-        color: var(--nav-link-hover-text);
-        background-color: var(--nav-link-hover-bg);
-      }
-
-      .nav-item a.active {
-        font-weight: 600;
-        border-bottom: 3px solid var(--accent-color);
-      }
-
-      select,
-      input,
-      textarea,
-      button,
-      label {
-        font-family: inherit;
-      }
-
-      h1 {
-        font-size: 1.6em;
-        font-weight: 700;
-        margin-bottom: 20px;
-        text-align: center;
-        line-height: 1.5;
-      }
-
-      #datetimeDisplay {
-        margin: 48px;
-      }
-
-      form {
-        background: white;
-        padding: 30px;
-        border-radius: 25px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        width: 100%;
-        max-width: 400px;
-      }
-
-      label {
-        display: block;
-        font-size: 0.9em;
-        font-weight: 700;
-        margin-bottom: 6px;
-      }
-
-      select,
-      input[type="text"],
-      textarea {
-        width: 100%;
-        padding: 10px;
-        font-size: 1em;
-        margin-bottom: 20px;
-        border: 1px solid #ccc;
-        border-radius: 12px;
-        background-color: #fff;
-      }
-
-      button {
-        width: 100%;
-        padding: 12px;
-        font-size: 1em;
-        color: white;
-        border: none;
-        border-radius: 12px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-      }
-
-      .input-counter {
-        display: inline-flex;
-        align-items: center;
-        margin-top: 4px;
-      }
-
-      .input-counter input[type="number"] {
-        width: 48px;
-        text-align: center;
-        margin-bottom: 20px;
-        padding: 10px 8px;
-        font-size: 1rem;
-        border-style: solid none;
-        border-color: #ccc;
-        border-width: 1px 0;
-        outline: none;
-        -moz-appearance: textfield;
-      }
-
-      .input-counter input::-webkit-outer-spin-button,
-      .input-counter input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-
-      .counter-button {
-        margin-bottom: 20px;
-        padding: 8px 12px;
-        font-size: 1.2rem;
-        font-weight: bold;
-        color: black;
-        background-color: transparent;
-        border: 1px solid #ccc;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
-
-      .counter-button:hover {
-        background-color: #3b82f6;
-        color: white;
-      }
-
-      .counter-button:active {
-        background-color: #2563eb;
-      }
-
-      #decrementButton {
-        border-radius: 12px 0 0 12px;
-      }
-      #incrementButton {
-        border-radius: 0 12px 12px 0;
-      }
-
-      #submitButton {
-        background-color: #2f80ed;
-      }
-
-      #submitButton:hover {
-        background-color: #1c60c3;
-      }
-
-      #saveChangesButton {
-        background-color: #4caf50;
-      }
-
-      #saveChangesButton:hover {
-        background-color: #3a9d40;
-      }
-
-      .custom-alert {
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 12px 20px;
-        border-radius: 6px;
-        color: white;
-        font-weight: bold;
-        font-family: "IBM Plex Sans JP", sans-serif;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.5s ease, visibility 0.5s ease;
-        z-index: 9999;
-      }
-
-      .custom-alert.show {
-        opacity: 1;
-        visibility: visible;
-      }
-
-      .custom-alert.success {
-        background-color: #4caf50;
-      }
-      .custom-alert.warning {
-        background-color: #ffa500;
-      }
-      .custom-alert.error {
-        background-color: #f44336;
-      }
-      .custom-alert.info {
-        background-color: #2196f3;
-      }
-
-      h2 {
-        font-size: 1.4em;
-        display: flex;
-        justify-content: center;
-        width: 100%;
-        max-width: 800px;
-        padding-bottom: 10px;
-      }
-
-      table {
-        border-collapse: collapse;
-        background-color: white;
-        width: 100%;
-        max-width: 900px; /* Increased max-width for new column */
-        margin: 20px auto;
-        border: 1px solid #dee2e6;
-        border-radius: 8px; /* Note: border-radius on table requires border-collapse: separate; or overflow:hidden on a container */
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-      }
-
-      th,
-      td {
-        padding: 12px;
-        text-align: center;
-        vertical-align: middle; /* Aligns content vertically */
-      }
-
-      th {
-        font-weight: 600;
-        background-color: #e9ecef;
-      }
-
-      #page-entry,
-      #page-summary,
-      #page-search {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-      }
-
-      #entryTable {
-        width: 100%;
-      }
-
-      /* --- STYLES for Summary Cards (previously for regions) --- */
-      #monthlySummaryContainer {
-        display: grid;
-        grid-template-columns: repeat(
-          auto-fit,
-          minmax(320px, 1fr)
-        ); /* Adjusted min-width */
-        gap: 1.5rem;
-        width: 100%;
-        max-width: 1200px; /* Allow for more cards */
-        margin: 0.8rem;
-        padding: 1rem 0;
-      }
-
-      .region-summary {
-        background-color: #fff;
-        border: 1px solid #e0e0e0;
-        border-radius: 12px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.07);
-        padding: 1.25rem;
-        transition: transform 0.2s, box-shadow 0.2s;
-      }
-
-      .region-summary:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
-      }
-
-      .region-title {
-        font-size: 1.2rem;
-        font-weight: 600;
-        border-bottom: 1.4px solid #e9ecef;
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.75rem;
-        text-align: center;
-      }
-
-      .country-list {
-        margin-top: 0.5rem;
-      }
-
-      .country-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 7px 4px;
-        border-bottom: 1px solid #f0f0f0;
-        font-size: 0.95rem;
-      }
-      .country-row:last-child {
-        border-bottom: none;
-      }
-
-      .total-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 4px;
-        margin-top: 10px;
-        font-weight: bold;
-        font-size: 1rem;
-        border-top: 1.4px solid rgba(0, 0, 0, 0.3);
-      }
-
-      /* --- NEW STYLES for Search and Summary Controls --- */
-
-      .controls-container {
-        display: flex;
-        flex-wrap: wrap; /* Allows items to wrap on smaller screens */
-        gap: 15px;
-        align-items: flex-end;
-        justify-content: center;
-        margin: 10px auto;
-        max-width: 700px;
-        width: 100%;
-        padding: 20px;
-        background-color: #ffffff;
-        border-radius: 15px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      }
-
-      .control-group {
-        flex: 1; /* Allows groups to grow */
-        min-width: 150px; /* Prevents controls from becoming too small */
-        align-items: center;
-      }
-
-      .summary-button-container {
-        display: flex;
-        flex-wrap: wrap; /* Allows items to wrap on smaller screens */
-        gap: 15px;
-      }
-
-      /* Remove bottom margin for inputs inside the new container */
-      .controls-container input,
-      .controls-container select {
-        margin-bottom: 0;
-      }
-
-      /* Specific styles for control buttons */
-      .controls-container button {
-        padding: 10px 15px;
-        width: auto; /* Allow button to size to its content */
-        flex-shrink: 0; /* Prevent button from shrinking */
-      }
-
-      #searchButton {
-        background-color: #007bff;
-      }
-      #searchButton:hover {
-        background-color: #0056b3;
-      }
-
-      #getSummaryButton {
-        background-color: #8f6cd9;
-      }
-      #getSummaryButton:hover {
-        background-color: #6f42c1;
-      }
-
-      #exportSummaryButton {
-        background-color: #1d6f42;
-      }
-      #exportSummaryButton:hover {
-        background-color: #165934;
-      }
-      #exportSummaryButton:disabled {
-        background-color: #9e9e9e;
-        cursor: not-allowed;
-      }
-
-      #searchResultsContainer {
-        width: 100%;
-        max-width: 900px; /* Match today's entries table */
-        margin-top: 20px;
-      }
-
-      /* Make the inquiry details in the results table more readable */
-      #searchResultsContainer td:nth-child(3) {
-        /* Targets the 3rd column (Inquiry Details) */
-        text-align: left;
-        white-space: pre-wrap; /* Allows text to wrap */
-        vertical-align: top;
-      }
-    </style>
-  </head>
-
-  <body>
-    <header class="app-header">
-      <div class="nav-container">
-        <div class="header-title">Yamanouchi Information Center</div>
-        <nav>
-          <ul class="nav-menu">
-            <li class="nav-item">
-              <a
-                href="#entry"
-                id="nav-entry"
-                >Data Entry</a
-              >
-            </li>
-            <li class="nav-item">
-              <a
-                href="#summary"
-                id="nav-summary"
-                >Monthly Summary</a
-              >
-            </li>
-            <li class="nav-item">
-              <a
-                href="#search"
-                id="nav-search"
-                >Inquiry Search</a
-              >
-            </li>
-          </ul>
-        </nav>
-      </div>
-    </header>
-
-    <main>
-      <div
-        id="customAlert"
-        class="custom-alert"
-      ></div>
-      <div
-        id="page-entry"
-        class="page"
-      >
-        <div
-          id="datetimeDisplay"
-          style="margin-bottom: 20px"
-        ></div>
-
-        <form
-          id="touristForm"
-          onsubmit="return false;"
-        >
-          <div>
-            <label for="area">Region　地域</label>
-            <select
-              id="area"
-              name="area"
-            ></select>
-          </div>
-          <div>
-            <label for="country">Country　国</label>
-            <select
-              id="country"
-              name="country"
-            ></select>
-          </div>
-          <div>
-            <label for="tourists">Number of Visitors　人数</label>
-            <div class="input-counter">
-              <button
-                type="button"
-                id="decrementButton"
-                class="counter-button"
-              >
-                -
-              </button>
-              <input
-                type="number"
-                id="tourists"
-                name="tourists"
-                value="2"
-                min="1"
-                oninput="validateVisitorCount(this)"
-              />
-              <button
-                type="button"
-                id="incrementButton"
-                class="counter-button"
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div>
-            <label for="accommodation">Accommodation Area　泊まり先</label>
-            <select
-              id="accommodation"
-              name="accommodation"
-            >
-              <option value="">Unknown 不明</option>
-              <option value="Yudanaka  湯田中">Yudanaka 湯田中</option>
-              <option value="Shibu-Andai  渋安代">Shibu-Andai  渋安代</option>
-              <option value="Kanbayashi Onsen  上林温泉">Kanbayashi Onsen  上林温泉</option>
-              <option value="Shiga Kogen  志賀高原">
-                Shiga Kogen 志賀高原
-              </option>
-              <option value="Kita-Shiga Kogen  北志賀高原">
-                Kita-Shiga Kogen 北志賀高原
-              </option>
-              <option value="Day trip  日帰り">Day trip 日帰り</option>
-            </select>
-          </div>
-          <div>
-            <label for="inquiry"
-              >Inquiry Details (Optional)　お問合せ内容（任意）</label
-            >
-            <textarea
-              id="inquiry"
-              name="inquiry"
-              rows="5"
-              placeholder="e.g. Asked about the way to Snow Monkey Park, place to eat, shuttle to Ryuoo..."
-            ></textarea>
-          </div>
-
-          <input
-            type="hidden"
-            id="editTimestamp"
-          />
-          <button
-            type="button"
-            id="submitButton"
-          >
-            Submit
-          </button>
-          <button
-            type="button"
-            id="saveChangesButton"
-            style="display: none"
-          >
-            Save Changes
-          </button>
-        </form>
-
-        <h2 style="margin-top: 36px">最近の来訪記録</h2>
-        <table id="entryTable">
-          <thead>
-            <tr>
-              <th>日時</th>
-              <th>地域</th>
-              <th>国</th>
-              <th>人数</th>
-              <th>泊まり先</th>
-              <th>お問合せ内容</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="entryTableBody"></tbody>
-        </table>
-      </div>
-      <div
-        id="page-summary"
-        class="page"
-      >
-        <h2 style="margin-top: 36px">月次サマリー</h2>
-        <div class="controls-container">
-          <div class="control-group">
-            <label for="summaryYear">Year</label>
-            <select id="summaryYear"></select>
-          </div>
-          <div class="control-group">
-            <label for="summaryMonth">Month</label>
-            <select id="summaryMonth"></select>
-          </div>
-          <div class="summary-button-container">
-            <button
-              type="button"
-              id="getSummaryButton"
-            >
-              Get Summary
-            </button>
-            <button
-              type="button"
-              id="exportSummaryButton"
-              disabled
-            >
-              Export to Excel
-            </button>
-          </div>
-        </div>
-        <div id="monthlySummaryContainer"></div>
-      </div>
-
-      <div
-        id="page-search"
-        class="page"
-      >
-        <h2 style="margin-top: 36px">過去の問い合わせ検索</h2>
-        <div class="controls-container">
-          <div
-            class="control-group"
-            style="flex-grow: 2"
-          >
-            <label for="searchKeyword">Keyword</label>
-            <input
-              type="text"
-              id="searchKeyword"
-              placeholder="e.g., monkey, bus, restaurant..."
-            />
-          </div>
-          <div class="control-group">
-            <label for="searchYear">年度</label>
-            <select id="searchYear"></select>
-          </div>
-          <div class="control-group">
-            <button
-              type="button"
-              id="searchButton"
-            >
-              Search
-            </button>
-          </div>
-        </div>
-        <div id="searchResultsContainer"></div>
-      </div>
-    </main>
-
-    <?!= HtmlService.createHtmlOutputFromFile('script').getContent(); ?>
-  </body>
-</html>
+function doGet(e) {
+  const html = HtmlService.createTemplateFromFile('index');
+  html.startupPage = e.parameter.page || 'entry'; 
+  return html.evaluate().setTitle('Inbound Stats @YIC');
+}
+
+function getAllCountryData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const countriesSheet = ss.getSheetByName("Countries");
+  if (!countriesSheet) {
+    throw new Error("The 'Countries' sheet was not found. Please ensure it exists.");
+  }
+  
+  const data = countriesSheet.getDataRange().getValues();
+  const result = [];
+  
+  // Assuming headers are in row 1, so we start reading from row 2 (index 1)
+  for (let i = 1; i < data.length; i++) {
+    const name = data[i][0];
+    const area = data[i][1];
+    const isFrequent = data[i][2] === true; // Ensure it's a true boolean
+    
+    if (name && area) {
+      result.push({ name: name, area: area, isFrequent: isFrequent });
+    }
+  }
+  return result;
+}
+
+// --- HELPER FUNCTIONS for Fiscal Year Management ---
+
+/**
+ * Determines the fiscal year sheet name for a given date (April-March).
+ * @param {Date} date The date to check.
+ * @return {string} The name of the sheet, e.g., "".
+ */
+function getFiscalYearSheetName(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0 = January, 3 = April
+  const fiscalYear = (month < 3) ? year - 1 : year;
+  return `${fiscalYear}`;
+}
+
+/**
+ * Checks if a sheet exists, creates it with headers if not.
+ * @param {string} sheetName The name of the sheet to ensure exists.
+ * @return {Sheet} The Google Sheet object.
+ */
+function ensureSheetExists(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName, 0); // Insert as first sheet for easy access
+    const headers = [["Timestamp", "Region", "Country", "Number of Visitors", "Inquiry Details", "Accommodation"]];
+    sheet.getRange("A2:F2").setValues(headers).setFontWeight("bold");
+    sheet.getRange("A:A").setNumberFormat('@'); // Set Timestamp column to Plain Text for ISO strings
+  }
+  return sheet;
+}
+
+// --- DATA ENTRY AND DAILY LOG FUNCTIONS ---
+
+/**
+ * Appends a new visitor entry to the correct fiscal year sheet.
+ */
+function submitVisitorData(area, country, numberOfVisitors, inquiryDetails, accommodation) {
+  const timestamp = new Date();
+  const sheetName = getFiscalYearSheetName(timestamp);
+  const sheet = ensureSheetExists(sheetName);
+  
+  sheet.appendRow([
+    timestamp.toISOString(), area, country,
+    numberOfVisitors, accommodation || "", inquiryDetails || "",
+  ]);
+}
+
+/**
+ * Retrieves all entries from the past 7 days.
+ * This function can handle date ranges that span across two fiscal year sheets.
+ */
+function getRecentEntries() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allResults = [];
+  
+  // 1. Define the 14-day date range
+  const now = new Date();
+  const fourteenDaysAgo = new Date();
+  fourteenDaysAgo.setDate(now.getDate() - 7);
+  fourteenDaysAgo.setHours(0, 0, 0, 0); // Start of the 7-day window
+
+  // 2. Determine which sheet(s) to search
+  const currentFYSheetName = getFiscalYearSheetName(now);
+  const previousFYSheetName = getFiscalYearSheetName(fourteenDaysAgo);
+
+  const sheetNamesToSearch = [currentFYSheetName];
+  // If the 7-day window crosses the fiscal year boundary (April 1st), add the previous year's sheet
+  if (currentFYSheetName !== previousFYSheetName) {
+    sheetNamesToSearch.push(previousFYSheetName);
+  }
+  
+  // 3. Loop through the necessary sheets and gather matching records
+  for (const sheetName of sheetNamesToSearch) {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) continue; // Skip if a sheet for a past fiscal year doesn't exist
+
+    const data = sheet.getDataRange().getValues();
+    for (let i = 2; i < data.length; i++) { // Assumes header on row 2
+      const row = data[i];
+      if (!row[0]) continue; // Skip empty rows
+      
+      const recordTimestamp = new Date(row[0]);
+      
+      // Check if the record's date falls within our 14-day window
+      if (recordTimestamp >= fourteenDaysAgo && recordTimestamp <= now) {
+        allResults.push({
+          timestamp: recordTimestamp.toISOString(),
+          area: row[1],
+          country: row[2],
+          visitors: row[3],
+          accommodation: row[4] || "",
+          inquiryDetails: row[5] || "",
+        });
+      }
+    }
+  }
+  
+  // 4. Sort all combined results by newest first before returning
+  allResults.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+  
+  return allResults;
+}
+
+/**
+ * Finds and edits an entry within the entry's corresponding fiscal year sheet.
+ */
+function editEntry(timestampStr, updatedEntry) {
+  const timestamp = new Date(timestampStr);
+  const sheetName = getFiscalYearSheetName(timestamp);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) throw new Error(`Data sheet for the corresponding year (${sheetName}) not found.`);
+
+  const textFinder = sheet.getRange("A:A").createTextFinder(timestampStr).matchEntireCell(true);
+  const foundCell = textFinder.findNext();
+
+  if (foundCell) {
+    const row = foundCell.getRow();
+    sheet.getRange(row, 2, 1, 5).setValues([[
+      updatedEntry.area, 
+      updatedEntry.country, 
+      updatedEntry.visitors,
+      updatedEntry.accommodation || "", 
+      updatedEntry.inquiryDetails || "",
+    ]]);
+    return true;
+  }
+  throw new Error("Could not find the entry to update.");
+}
+
+/**
+ * Finds and deletes an entry within the entry's corresponding fiscal year sheet.
+ */
+function deleteEntry(timestampStr) {
+  const timestamp = new Date(timestampStr);
+  const sheetName = getFiscalYearSheetName(timestamp);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  if (!sheet) throw new Error(`Data sheet for the corresponding year (${sheetName}) not found.`);
+
+  const textFinder = sheet.getRange("A:A").createTextFinder(timestampStr).matchEntireCell(true);
+  const foundCell = textFinder.findNext();
+
+  if (foundCell) {
+    sheet.deleteRow(foundCell.getRow());
+    return true;
+  }
+  throw new Error("Entry not found.");
+}
+
+// --- REPORTING AND ANALYTICS FUNCTIONS ---
+
+/**
+ * The main calculation engine for monthly summaries for any given month.
+ */
+function calculateMonthlySummary(year, month_0_based) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const countriesSheet = ss.getSheetByName("Countries");
+  
+  const reportDate = new Date(year, month_0_based, 15);
+  const dataSheetName = getFiscalYearSheetName(reportDate);
+  const dataSheet = ss.getSheetByName(dataSheetName);
+  
+  const countryInfo = {};
+  const countryData = countriesSheet.getDataRange().getValues();
+  for (let i = 1; i < countryData.length; i++) { // Assumes headers on row 1 of Countries sheet
+    const name = countryData[i][0];
+    if (name) {
+      countryInfo[name] = {
+        region: countryData[i][1],
+        isFrequent: countryData[i][2] === true,
+        order: countryData[i][3] || 999
+      };
+    }
+  }
+
+  const monthlyTotals = {};
+  if (dataSheet) {
+    const allData = dataSheet.getDataRange().getValues();
+    if (allData.length > 2) {
+      const header = allData[1];
+      const dataRows = allData.slice(2);
+      const timestampIdx = header.indexOf("Timestamp");
+      const countryIdx = header.indexOf("Country");
+      const visitorsIdx = header.indexOf("Number of Visitors");
+      if(timestampIdx === -1 || countryIdx === -1 || visitorsIdx === -1) { throw new Error(`Required headers not found in ${dataSheetName}`); }
+
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        if (!row[timestampIdx]) continue;
+        const timestamp = new Date(row[timestampIdx]);
+        if (timestamp.getFullYear() === year && timestamp.getMonth() === month_0_based) {
+          const countryName = row[countryIdx];
+          const visitors = Number(row[visitorsIdx]) || 0;
+          monthlyTotals[countryName] = (monthlyTotals[countryName] || 0) + visitors;
+        }
+      }
+    }
+  }
+
+  const summaryByRegion = {};
+  for (const countryName in countryInfo) {
+    const info = countryInfo[countryName];
+    const region = info.region;
+    const visitors = monthlyTotals[countryName] || 0;
+
+    if (!summaryByRegion[region]) {
+      summaryByRegion[region] = {};
+      if (region !== "Unknown") {
+        const restKey = `Rest of ${region}`;
+        summaryByRegion[region][restKey] = { country: restKey, visitors: 0, isFrequent: false, order: 9999 };
+      }
+    }
+    
+    if (info.isFrequent) {
+      summaryByRegion[region][countryName] = { country: countryName, visitors: visitors, isFrequent: true, order: info.order };
+    } else {
+      if (region !== "Unknown") {
+        const restKey = `Rest of ${region}`;
+        summaryByRegion[region][restKey].visitors += visitors;
+      }
+    }
+  }
+
+  const finalOutput = {};
+  for (const region in summaryByRegion) {
+    finalOutput[region] = Object.values(summaryByRegion[region]).sort((a, b) => a.order - b.order);
+  }
+  
+  return finalOutput;
+}
+
+/**
+ * Gets the summary for any month specified by the frontend.
+ */
+function getSummaryForMonth(year, month_1_based) {
+  return calculateMonthlySummary(year, month_1_based - 1);
+}
+
+/**
+ * Searches through inquiry records for a specific keyword.
+ */
+function searchInquiries(keyword, fiscalYear) {
+  if (!keyword) return [];
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetsToSearch = [];
+
+  if (fiscalYear === "All") {
+    const allSheets = ss.getSheets();
+    for (const sheet of allSheets) {
+    const sheetName = `${fiscalYear}`;
+    const specificSheet = ss.getSheetByName(sheetName);
+    if (specificSheet) sheetsToSearch.push(specificSheet);
+  if (sheetsToSearch.length === 0) return [];
+
+  const allResults = [];
+  const INQUIRY_COLUMN_LETTER = 'E';
+
+  for (const sheet of sheetsToSearch) {
+    const textFinder = sheet.getRange(INQUIRY_COLUMN_LETTER + ":" + INQUIRY_COLUMN_LETTER)
+                           .createTextFinder(keyword)
+                           .ignoreCase(true)
+                           .findAll();
+    
+    for (const range of textFinder) {
+      const rowNum = range.getRow();
+      const rowData = sheet.getRange(rowNum, 1, 1, 6).getValues()[0];
+      allResults.push({
+        timestamp: rowData[0], // Column A
+        country: rowData[2],   // Column C
+        inquiryDetails: rowData[4], // Column E
+        accommodation: rowData[5] // Column F
+      });
+    }
+  }
+  
+  allResults.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+  return allResults;
+}}
+}
